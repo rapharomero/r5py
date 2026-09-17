@@ -5,6 +5,7 @@
 import copy
 
 import pandas
+from tqdm.auto import tqdm
 
 from .base_travel_time_matrix import BaseTravelTimeMatrix
 from ..util import start_jvm
@@ -26,6 +27,7 @@ class TravelTimeMatrix(BaseTravelTimeMatrix):
         origins=None,
         destinations=None,
         snap_to_network=False,
+        progress=True,
         **kwargs,
     ):
         """
@@ -56,6 +58,8 @@ class TravelTimeMatrix(BaseTravelTimeMatrix):
             before routing? If `True`, the default search radius (defined in
             `com.conveyal.r5.streets.StreetLayer.LINK_RADIUS_METERS`) is used,
             if `int`, use `snap_to_network` meters as the search radius.
+        progress : bool, default True
+            Display a progress bar while routing each origin.
         **kwargs : mixed
             Any arguments than can be passed to r5py.RegionalTask:
             ``departure``, ``departure_time_window``, ``percentiles``,
@@ -71,12 +75,12 @@ class TravelTimeMatrix(BaseTravelTimeMatrix):
             snap_to_network,
             **kwargs,
         )
-        data = self._compute()
+        data = self._compute(progress=progress)
         for column in data.columns:
             self[column] = data[column]
         del self.transport_network
 
-    def _compute(self):
+    def _compute(self, progress=True):
         """
         Compute travel times from all origins to all destinations.
 
@@ -95,7 +99,15 @@ class TravelTimeMatrix(BaseTravelTimeMatrix):
         self.request.destinations = self.destinations
 
         od_matrix = pandas.concat(
-            [self._travel_times_per_origin(from_id) for from_id in self.origins.id],
+            [
+                self._travel_times_per_origin(from_id)
+                for from_id in tqdm(
+                    self.origins.id,
+                    desc="Computing travel-time matrix",
+                    unit="origin",
+                    disable=not progress,
+                )
+            ],
             ignore_index=True,
         )
 
